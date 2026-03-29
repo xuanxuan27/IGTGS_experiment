@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>LAB Compare · 91 譜 GT</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: {
+          display: ['Outfit', 'system-ui', 'sans-serif'],
+          sans: ['"Source Sans 3"', 'system-ui', 'sans-serif'],
+        },
+        colors: {
+          surface: { DEFAULT: '#f8fafc', card: 'rgba(255,255,255,0.82)' },
+        },
+      },
+    },
+  };
+</script>
+<style>
+  /* 與後端比對語意一致的樣式（由列 class 驅動） */
+  .compareTable { table-layout: fixed; width: 100%; border-collapse: separate; border-spacing: 0; }
+  .compareTable td .time {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.75rem;
+    color: #64748b;
+    margin-right: 0.35rem;
+  }
+  .compareTable td.active {
+    background: linear-gradient(180deg, #fef9c3 0%, #fde68a 100%);
+    box-shadow: inset 0 0 0 2px rgba(217, 119, 6, 0.28);
+  }
+  .diffText { color: #b91c1c; font-weight: 700; }
+  .extraText { color: #c2410c; font-weight: 600; background: #fff7ed; padding: 0.1rem 0.35rem; border-radius: 0.375rem; }
+  .missing { border-left: 3px solid #b91c1c; background: #fef2f2; }
+  .blankRow { background: #f8fafc; color: #94a3b8; }
+  .label-text { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; }
+  .inp {
+    margin-top: 0.375rem; display: block; width: 100%; border-radius: 0.75rem;
+    border: 1px solid #e2e8f0; background: #fff; padding: 0.5rem 0.75rem; font-size: 0.875rem;
+    color: #1e293b; box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+  }
+  .inp:focus { outline: none; border-color: #818cf8; box-shadow: 0 0 0 3px rgb(199 210 254 / 0.45); }
+  .inp-file {
+    margin-top: 0.375rem; display: block; width: 100%; font-size: 0.875rem; color: #475569;
+  }
+  .inp-file::file-selector-button {
+    margin-right: 1rem; cursor: pointer; border-radius: 0.5rem; border: 0; background: #f1f5f9;
+    padding: 0.5rem 1rem; font-size: 0.875rem; font-weight: 600; color: #334155;
+  }
+  .inp-file::file-selector-button:hover { background: #e2e8f0; }
+  .btn-primary {
+    display: inline-flex; align-items: center; justify-content: center; border-radius: 0.75rem;
+    background: #4f46e5; padding: 0.625rem 1rem; font-size: 0.875rem; font-weight: 600; color: #fff;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.05); border: none; cursor: pointer;
+  }
+  .btn-primary:hover { background: #4338ca; }
+  .btn-primary:focus { outline: none; box-shadow: 0 0 0 2px #fff, 0 0 0 4px #6366f1; }
+  .btn-muted {
+    display: inline-flex; align-items: center; justify-content: center; border-radius: 0.75rem;
+    border: 1px solid #e2e8f0; background: #fff; padding: 0.625rem 1rem; font-size: 0.875rem;
+    font-weight: 600; color: #334155; box-shadow: 0 1px 2px rgb(0 0 0 / 0.05); cursor: pointer;
+  }
+  .btn-muted:hover { background: #f8fafc; }
+  .btn-muted:focus { outline: none; box-shadow: 0 0 0 2px #e2e8f0; }
+</style>
+</head>
+
+<body class="min-h-screen bg-gradient-to-br from-slate-100 via-white to-indigo-50/50 font-sans text-slate-800 antialiased">
+
+<div class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+
+  <header class="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <div>
+      <p class="font-display text-xs font-bold uppercase tracking-widest text-indigo-600">Chord Lab</p>
+      <h1 class="font-display mt-1 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">IGTGS 和弦比對實驗系統</h1>
+      <p class="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600">
+        對齊與統計由後端 <code class="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-mono text-indigo-800">/api/compare/lab</code> 計算
+        <span class="text-slate-400">（domain：lab_parser · gt_normalize · align_compare）</span>
+      </p>
+    </div>
+  </header>
+
+  <section class="mb-6 rounded-2xl border border-slate-200/80 bg-white/90 p-6 shadow-lg shadow-slate-200/40 backdrop-blur-sm">
+    <h2 class="font-display border-b border-slate-100 pb-3 text-sm font-semibold text-slate-800">資料與設定</h2>
+    <div class="mt-5 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      <div>
+        <label class="label-text" for="beforeFile">Before .lab</label>
+        <input type="file" id="beforeFile" accept=".lab" class="inp-file" />
+      </div>
+      <div>
+        <label class="label-text" for="afterFile">After .lab</label>
+        <input type="file" id="afterFile" accept=".lab" class="inp-file" />
+      </div>
+      <div>
+        <label class="label-text" for="gtFile">91 譜 GT (gt.json)</label>
+        <input type="file" id="gtFile" accept=".json" class="inp-file" />
+        <p class="mt-2 text-xs text-slate-500" id="gtInfo"></p>
+      </div>
+    </div>
+
+    <div class="mt-6 rounded-xl border border-dashed border-slate-200 bg-slate-50/80 p-4">
+      <label class="label-text">91 譜網址（後端爬蟲）</label>
+      <div class="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <input type="url" id="puUrl" placeholder="https://www.91pu.com.tw/..." class="inp sm:flex-1" />
+        <button type="button" id="scrapeBtn" class="btn-primary shrink-0">載入為 GT</button>
+      </div>
+      <p class="mt-2 text-xs text-slate-500" id="scrapeStatus"></p>
+    </div>
+
+    <div class="mt-6 rounded-xl border border-indigo-100 bg-indigo-50/40 p-4">
+      <label class="label-text text-indigo-800">YouTube（Data API 搜尋 + 下載音訊）</label>
+      <p class="mt-1 text-xs text-slate-600">YouTube 搜尋與下載皆使用 <code class="rounded bg-white/80 px-1">yt-dlp</code>（不需 Google API 金鑰）；分析和弦需設定 <code class="rounded bg-white/80 px-1">IGTGS_ROOT</code>，並安裝 <code class="rounded bg-white/80 px-1">ffmpeg</code>。Before = submission 詞表，After = custom 詞表。</p>
+      <div class="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+        <input type="text" id="ytQuery" placeholder="搜尋歌曲或演出者…" class="inp sm:flex-1" />
+        <button type="button" id="ytSearchBtn" class="btn-primary shrink-0">搜尋</button>
+      </div>
+      <div id="ytResults" class="mt-3 max-h-48 overflow-y-auto rounded-lg border border-slate-200 bg-white/90 text-sm hidden"></div>
+      <div class="mt-3 flex flex-wrap items-center gap-2">
+        <button type="button" id="ytAnalyzeBtn" class="btn-muted" disabled>對選取影片分析和弦</button>
+        <span class="text-xs text-slate-500" id="ytPickLabel">尚未選擇影片</span>
+      </div>
+      <p class="mt-2 text-xs text-slate-600" id="ytChordStatus"></p>
+    </div>
+
+    <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:max-w-xl">
+      <div>
+        <label class="label-text" for="gtCapoSel">GT 原始 Capo</label>
+        <select id="gtCapoSel" class="inp"></select>
+      </div>
+      <div>
+        <label class="label-text" for="targetCapoSel">目標 Capo（比對用）</label>
+        <select id="targetCapoSel" class="inp"></select>
+      </div>
+    </div>
+  </section>
+
+  <section class="mb-6 rounded-2xl border border-slate-200/80 bg-white/90 p-6 shadow-md shadow-slate-200/30 backdrop-blur-sm">
+    <h2 class="font-display border-b border-slate-100 pb-3 text-sm font-semibold text-slate-800">音訊</h2>
+    <label class="label-text mt-4 block" for="audioFile">檔案</label>
+    <input type="file" id="audioFile" accept="audio/*" class="inp-file max-w-lg" />
+    <div class="mt-4 flex flex-wrap items-center gap-3">
+      <button type="button" id="playBtn" class="btn-muted">播放 / 暫停</button>
+      <span id="timeText" class="rounded-lg bg-slate-100 px-3 py-1.5 font-mono text-sm text-slate-700 tabular-nums">t=0.00</span>
+    </div>
+    <audio id="audio" controls class="mt-4 w-full rounded-xl accent-indigo-600"></audio>
+  </section>
+
+  <section class="overflow-hidden rounded-2xl border border-slate-200/80 bg-white/95 shadow-xl shadow-slate-200/50">
+    <div class="compare-scroll max-h-[min(72vh,920px)] overflow-auto">
+      <table class="compareTable min-w-full" id="compareTable">
+        <thead class="sticky top-0 z-20">
+          <tr class="bg-slate-800 text-left text-white shadow-md">
+            <th class="px-4 py-3.5 text-xs font-bold uppercase tracking-wider" style="width:22%">91譜 (GT)</th>
+            <th class="px-4 py-3.5 text-xs font-bold uppercase tracking-wider" style="width:39%">Before</th>
+            <th class="px-4 py-3.5 text-xs font-bold uppercase tracking-wider" style="width:39%">After</th>
+          </tr>
+        </thead>
+        <tbody id="compareBody" class="divide-y divide-slate-100 bg-white"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="mt-4 flex flex-wrap gap-2 text-xs text-slate-600">
+    <span class="rounded-full bg-slate-100 px-2.5 py-1">圖例</span>
+    <span class="rounded-full border border-red-200 bg-red-50 px-2.5 py-1 font-semibold text-red-800">紅字＝與 GT 不同</span>
+    <span class="rounded-full border border-orange-200 bg-orange-50 px-2.5 py-1 font-semibold text-orange-900">橘底＝多餘</span>
+    <span class="rounded-full border border-red-200 bg-rose-50 px-2.5 py-1">左紅邊＝漏標</span>
+    <span class="rounded-full bg-slate-100 px-2.5 py-1 text-slate-500">灰底＝對齊空白</span>
+  </div>
+
+  <div id="errorCounts" class="mt-4 grid gap-3 sm:grid-cols-2">
+    <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <p class="font-display text-xs font-bold uppercase tracking-wide text-indigo-600">Before 錯誤</p>
+      <p class="mt-2 text-sm text-slate-700">
+        多餘 <span id="beforeExtra" class="font-semibold tabular-nums text-slate-900">0</span>
+        <span class="mx-1 text-slate-300">·</span>
+        漏標 <span id="beforeMissing" class="font-semibold tabular-nums text-slate-900">0</span>
+        <span class="mx-1 text-slate-300">·</span>
+        標錯 <span id="beforeWrong" class="font-semibold tabular-nums text-slate-900">0</span>
+        <span class="mx-1 text-slate-300">·</span>
+        合計 <span id="beforeTotal" class="font-bold tabular-nums text-indigo-700">0</span>
+      </p>
+    </div>
+    <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <p class="font-display text-xs font-bold uppercase tracking-wide text-indigo-600">After 錯誤</p>
+      <p class="mt-2 text-sm text-slate-700">
+        多餘 <span id="afterExtra" class="font-semibold tabular-nums text-slate-900">0</span>
+        <span class="mx-1 text-slate-300">·</span>
+        漏標 <span id="afterMissing" class="font-semibold tabular-nums text-slate-900">0</span>
+        <span class="mx-1 text-slate-300">·</span>
+        標錯 <span id="afterWrong" class="font-semibold tabular-nums text-slate-900">0</span>
+        <span class="mx-1 text-slate-300">·</span>
+        合計 <span id="afterTotal" class="font-bold tabular-nums text-indigo-700">0</span>
+      </p>
+    </div>
+  </div>
+
+  <div id="compareErr" class="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800 empty:hidden"></div>
+
+</div>
+
+<script>
+  let beforeLabText = "";
+  let afterLabText = "";
+  let gtChordsRaw = [];
+  let gtSource = "";
+  let gtCapo = 4;
+  let targetCapo = 0;
+  let selectedYoutubeVideoId = null;
+  let selectedYoutubeTitle = "";
+
+  const compareBody = document.getElementById("compareBody");
+  const audio = document.getElementById("audio");
+  const compareErr = document.getElementById("compareErr");
+
+  const gtCapoSel = document.getElementById("gtCapoSel");
+  const targetCapoSel = document.getElementById("targetCapoSel");
+
+  const TD_BASE = "px-4 py-3 text-sm align-top";
+
+  function initCapoSelect(sel, defaultValue){
+    sel.innerHTML = "";
+    for(let i=0;i<=8;i++){
+      const opt = document.createElement("option");
+      opt.value = String(i);
+      opt.textContent = "capo " + i;
+      if(i === defaultValue) opt.selected = true;
+      sel.appendChild(opt);
+    }
+  }
+
+  initCapoSelect(gtCapoSel, 4);
+  initCapoSelect(targetCapoSel, 0);
+
+  gtCapoSel.addEventListener("change", ()=>{
+    gtCapo = parseInt(gtCapoSel.value, 10) || 0;
+    refreshGtInfo();
+    refreshCompare();
+  });
+  targetCapoSel.addEventListener("change", ()=>{
+    targetCapo = parseInt(targetCapoSel.value, 10) || 0;
+    refreshGtInfo();
+    refreshCompare();
+  });
+
+  function refreshGtInfo(){
+    document.getElementById("gtInfo").textContent =
+      (gtSource ? "source: " + gtSource + " · " : "") +
+      "raw chords: " + gtChordsRaw.length + " · gtCapo=" + gtCapo + " · targetCapo=" + targetCapo;
+  }
+
+  function escapeHtml(s){
+    if(s == null) return "";
+    return String(s)
+      .replace(/&/g,"&amp;").replace(/</g,"&lt;")
+      .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  }
+
+  function setCounts(c){
+    const b = c.before || {};
+    const a = c.after || {};
+    const set = (id, v)=>{ const el = document.getElementById(id); if(el) el.textContent = v; };
+    set("beforeExtra", b.extra ?? 0);
+    set("beforeMissing", b.missing ?? 0);
+    set("beforeWrong", b.wrong ?? 0);
+    set("beforeTotal", b.total ?? 0);
+    set("afterExtra", a.extra ?? 0);
+    set("afterMissing", a.missing ?? 0);
+    set("afterWrong", a.wrong ?? 0);
+    set("afterTotal", a.total ?? 0);
+  }
+
+  function renderFromApi(data){
+    compareBody.innerHTML = ""
+    compareErr.textContent = "";
+    setCounts(data.counts || {});
+    const rows = data.merged_rows || [];
+
+    for(const r of rows){
+      const tr = document.createElement("tr");
+      tr.dataset.idx = r.idx;
+      tr.dataset.start = String(r.row_start);
+      tr.dataset.end = String(r.row_end);
+      tr.className = "transition-colors hover:bg-slate-50/90";
+
+      const gtCell = document.createElement("td");
+      gtCell.className = "gtCell " + TD_BASE;
+      if(r.gt_blank) gtCell.classList.add("blankRow");
+      if(r.gt_cell_missing) gtCell.classList.add("missing");
+      const gti = r.gt_idx >= 0 ? String(r.gt_idx).padStart(4,"0") + "  " : "—  ";
+      gtCell.innerHTML = "<span class=\"time\">" + gti + "</span><span class=\"label font-medium text-slate-800\">" + escapeHtml(r.gt_chord) + "</span>";
+
+      const beforeCell = document.createElement("td");
+      beforeCell.className = "beforeCell " + TD_BASE;
+      if(r.before_blank) beforeCell.classList.add("blankRow");
+      const blab = r.before_seg ? r.before_seg.label : "—";
+      let bCls = "label font-medium text-slate-800";
+      if(r.before_label_diff) bCls += " diffText";
+      if(r.before_label_extra) bCls += " extraText";
+      beforeCell.innerHTML = "<span class=\"time\">" + escapeHtml(r.before_time) + "</span><span class=\"" + bCls + "\">" + escapeHtml(blab) + "</span>";
+      if(r.before_label_extra){
+        const badge = document.createElement("span");
+        badge.className = "extraBadge text-xs font-semibold text-orange-800";
+        badge.textContent = " (多餘)";
+        badge.style.marginLeft = "4px";
+        beforeCell.appendChild(badge);
+      }
+
+      const afterCell = document.createElement("td");
+      afterCell.className = "afterCell " + TD_BASE;
+      if(r.after_cell_blank) afterCell.classList.add("blankRow");
+      const alab = r.after_seg ? r.after_seg.label : "—";
+      let aCls = "label font-medium text-slate-800" + (r.after_label_diff ? " diffText" : "");
+      afterCell.innerHTML = "<span class=\"time\">" + escapeHtml(r.after_time) + "</span><span class=\"" + aCls + "\">" + escapeHtml(alab) + "</span>";
+
+      tr.appendChild(gtCell);
+      tr.appendChild(beforeCell);
+      tr.appendChild(afterCell);
+      compareBody.appendChild(tr);
+    }
+
+    const t = audio.currentTime || 0;
+    highlightMergedRow(findActiveIndexByTime(compareBody, t));
+  }
+
+  async function refreshCompare(){
+    compareErr.textContent = "";
+    try{
+      const res = await fetch("/api/compare/lab", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          before_lab: beforeLabText,
+          after_lab: afterLabText,
+          chords_raw: gtChordsRaw,
+          gt_capo: gtCapo,
+          target_capo: targetCapo
+        })
+      });
+      let data = {};
+      try{ data = await res.json(); }catch(_){}
+      if(!res.ok){
+        const d = data.detail;
+        compareErr.textContent = typeof d === "string" ? d : (d ? JSON.stringify(d) : ("HTTP " + res.status));
+        compareBody.innerHTML = "";
+        setCounts({ before: {}, after: {} });
+        return;
+      }
+      renderFromApi(data);
+    }catch(e){
+      compareErr.textContent = "無法連上後端（請用 http://127.0.0.1:8000/ui/lab_compare.html 開啟）";
+      console.error(e);
+    }
+  }
+
+  function findActiveIndexByTime(container, t){
+    const rows = container?.querySelectorAll("tr");
+    if(!rows) return -1;
+    for(const row of rows){
+      const s = parseFloat(row.dataset.start);
+      const e = parseFloat(row.dataset.end);
+      if(Number.isFinite(s) && Number.isFinite(e) && t >= s && t < e){
+        return parseInt(row.dataset.idx, 10);
+      }
+    }
+    return -1;
+  }
+
+  function highlightMergedRow(idx){
+    compareBody?.querySelectorAll("td.active").forEach(el=>el.classList.remove("active"));
+    if(idx >= 0){
+      const row = compareBody?.querySelector("tr[data-idx=\"" + idx + "\"]");
+      row?.querySelectorAll("td").forEach(td=>td.classList.add("active"));
+    }
+  }
+
+  document.getElementById("beforeFile").addEventListener("change", async (e)=>{
+    const f = e.target.files[0];
+    if(!f){ beforeLabText = ""; await refreshCompare(); return; }
+    beforeLabText = await f.text();
+    await refreshCompare();
+  });
+
+  document.getElementById("afterFile").addEventListener("change", async (e)=>{
+    const f = e.target.files[0];
+    if(!f){ afterLabText = ""; await refreshCompare(); return; }
+    afterLabText = await f.text();
+    await refreshCompare();
+  });
+
+  document.getElementById("gtFile").addEventListener("change", async (e)=>{
+    const f = e.target.files[0];
+    if(!f){ gtChordsRaw = []; gtSource = ""; refreshGtInfo(); await refreshCompare(); return; }
+    const obj = JSON.parse(await f.text());
+    gtChordsRaw = Array.isArray(obj.chords) ? obj.chords : [];
+    gtSource = obj.source || "";
+    refreshGtInfo();
+    await refreshCompare();
+  });
+
+  function setYoutubeSelection(videoId, title){
+    selectedYoutubeVideoId = videoId || null;
+    selectedYoutubeTitle = title || "";
+    document.getElementById("ytPickLabel").textContent =
+      selectedYoutubeVideoId ? ("已選：" + selectedYoutubeTitle + " (" + selectedYoutubeVideoId + ")") : "尚未選擇影片";
+    document.getElementById("ytAnalyzeBtn").disabled = !selectedYoutubeVideoId;
+  }
+
+  document.getElementById("ytSearchBtn").addEventListener("click", async ()=>{
+    const q = document.getElementById("ytQuery").value.trim();
+    const box = document.getElementById("ytResults");
+    const st = document.getElementById("ytChordStatus");
+    st.textContent = "";
+    box.innerHTML = "";
+    if(!q){ st.textContent = "請輸入搜尋關鍵字"; return; }
+    st.textContent = "搜尋中…";
+    try{
+      const r = await fetch("/api/youtube/search?q=" + encodeURIComponent(q) + "&max_results=12");
+      let data = {};
+      try{ data = await r.json(); }catch(_){}
+      if(!r.ok){
+        const d = data.detail;
+        st.textContent = typeof d === "string" ? d : (d ? JSON.stringify(d) : ("HTTP " + r.status));
+        box.classList.add("hidden");
+        return;
+      }
+      const items = data.items || [];
+      if(!items.length){
+        st.textContent = "沒有結果";
+        box.classList.add("hidden");
+        return;
+      }
+      box.classList.remove("hidden");
+      items.forEach((it)=>{
+        const row = document.createElement("button");
+        row.type = "button";
+        row.className = "flex w-full items-start gap-2 border-b border-slate-100 px-2 py-2 text-left hover:bg-indigo-50";
+        row.innerHTML =
+          "<span class=\"shrink-0 font-mono text-xs text-slate-500\">" + escapeHtml(it.video_id) + "</span>" +
+          "<span class=\"font-medium text-slate-800\">" + escapeHtml(it.title) + "</span>" +
+          "<span class=\"ml-auto text-xs text-slate-500\">" + escapeHtml(it.channel_title || "") + "</span>";
+        row.addEventListener("click", ()=>{
+          setYoutubeSelection(it.video_id, it.title);
+          Array.from(box.querySelectorAll("button")).forEach(b=>b.classList.remove("ring-2","ring-indigo-400"));
+          row.classList.add("ring-2","ring-indigo-400");
+        });
+        box.appendChild(row);
+      });
+      st.textContent = "點選一則影片後按「分析和弦」";
+    }catch(e){
+      st.textContent = "搜尋請求失敗";
+      console.error(e);
+    }
+  });
+
+  document.getElementById("ytAnalyzeBtn").addEventListener("click", async ()=>{
+    const st = document.getElementById("ytChordStatus");
+    st.textContent = "";
+    if(!selectedYoutubeVideoId){ st.textContent = "請先搜尋並選擇影片"; return; }
+    st.textContent = "下載音訊並執行 LSTM+Refiner（Submission 與 Custom 各一次，可能需數分鐘）…";
+    try{
+      const r = await fetch("/api/youtube/chord-analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ video_id: selectedYoutubeVideoId }),
+      });
+      let data = {};
+      try{ data = await r.json(); }catch(_){}
+      if(!r.ok){
+        const d = data.detail;
+        st.textContent = typeof d === "string" ? d : (d ? JSON.stringify(d) : ("HTTP " + r.status));
+        return;
+      }
+      beforeLabText = data.before_lab || "";
+      afterLabText = data.after_lab || "";
+      const au = data.audio_url;
+      if(au){
+        audio.src = au.startsWith("/") ? au : au;
+        audio.load();
+      }
+      st.textContent = "完成 · Before segments: " + (data.before_meta && data.before_meta.segmentCount) +
+        " · After segments: " + (data.after_meta && data.after_meta.segmentCount);
+      await refreshCompare();
+    }catch(e){
+      st.textContent = "分析和弦失敗";
+      console.error(e);
+    }
+  });
+
+  document.getElementById("scrapeBtn").addEventListener("click", async ()=>{
+    const url = document.getElementById("puUrl").value.trim();
+    const st = document.getElementById("scrapeStatus");
+    st.textContent = "";
+    if(!url){ st.textContent = "請輸入網址"; return; }
+    st.textContent = "爬蟲中…";
+    try{
+      const r = await fetch("/api/scrape/91pu", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url })
+      });
+      let data = {};
+      try{ data = await r.json(); }catch(_){}
+      if(!r.ok){
+        const d = data.detail;
+        st.textContent = typeof d === "string" ? d : (d ? JSON.stringify(d) : ("HTTP " + r.status));
+        return;
+      }
+      gtChordsRaw = Array.isArray(data.chords) ? data.chords : [];
+      gtSource = data.source || url;
+      refreshGtInfo();
+      st.textContent = "完成，" + gtChordsRaw.length + " 個和弦";
+      await refreshCompare();
+    }catch(err){
+      st.textContent = "請求失敗";
+      console.error(err);
+    }
+  });
+
+  document.getElementById("audioFile").addEventListener("change", (e)=>{
+    const f = e.target.files[0];
+    if(!f) return;
+    audio.src = URL.createObjectURL(f);
+    audio.load();
+  });
+
+  document.getElementById("playBtn").addEventListener("click", ()=>{
+    if(audio.paused) audio.play();
+    else audio.pause();
+  });
+
+  audio.addEventListener("timeupdate", ()=>{
+    const t = audio.currentTime || 0;
+    document.getElementById("timeText").textContent = "t=" + t.toFixed(2);
+    const idx = findActiveIndexByTime(compareBody, t);
+    highlightMergedRow(idx);
+  });
+
+  audio.addEventListener("loadedmetadata", ()=>{
+    highlightMergedRow(findActiveIndexByTime(compareBody, audio.currentTime || 0));
+  });
+
+  refreshGtInfo();
+  refreshCompare();
+</script>
+
+</body>
+</html>
