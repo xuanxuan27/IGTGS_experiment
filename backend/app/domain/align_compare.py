@@ -17,7 +17,18 @@ _MAIN = re.compile(r"^([A-G])([#b]?)(.*)$")
 
 
 def is_rest_like(label: str | None) -> bool:
-    return norm_chord(label or "") == "N"
+    """休止／無和弦標記（GT 與 lab 可能寫法不同）。"""
+    s = norm_chord(label or "")
+    if not s:
+        return True
+    u = s.upper().replace(" ", "")
+    if u in ("N", "X", "NC"):
+        return True
+    if u in ("N.C.", "N/C", "N.C", "NOCHORD"):
+        return True
+    if s in ("—", "-", "－"):
+        return True
+    return s == "N"
 
 
 def _parse_root_suffix_bass(label: str) -> dict[str, Any] | None:
@@ -106,11 +117,15 @@ def _chord_candidates(label: str) -> set[str]:
 
 
 def chord_equals_by_mapping(a: str, b: str) -> bool:
+    """左右是否語意相同；一方休止一方有和弦必為 False（舊版 na==N 恒 True 會導致永不標紅）。"""
+    ra, rb = is_rest_like(a), is_rest_like(b)
+    if ra and rb:
+        return True
+    if ra or rb:
+        return False
     na, nb = norm_chord(a), norm_chord(b)
     if not na or not nb:
-        return True
-    if na == "N":
-        return True
+        return na == nb
     ca, cb = _chord_candidates(na), _chord_candidates(nb)
     if not ca or not cb:
         return na == nb
@@ -500,14 +515,14 @@ def _style_merged(
             continue
         if ao == "I" and bs:
             pass
-        elif gti >= 0:
-            if bs and not is_rest_like(bs.label) and not chord_equals_by_mapping(bs.label, gt_disp[gti]):
+        elif gti >= 0 and gti < len(gt_disp):
+            gch = gt_disp[gti]
+            if bs and not chord_equals_by_mapping(bs.label, gch):
                 r["before_label_diff"] = True
-            a_idx = gt_to_after.get(gti)
-            if a_idx is not None and a_idx < len(after_seg):
-                alab = after_seg[a_idx].label or ""
-                if alab and not chord_equals_by_mapping(alab, gt_disp[gti]):
-                    r["after_label_diff"] = True
+            # 與 API 顯示一致：用列上解析出的 after 段，而非僅 gt_idx→全域索引
+            ares_cmp = r.get("_after_resolved")
+            if ares_cmp is not None and not chord_equals_by_mapping(ares_cmp.label or "", gch):
+                r["after_label_diff"] = True
         if not ares and (gti >= 0 or bsi >= 0):
             r["after_cell_blank"] = True
 
@@ -534,16 +549,13 @@ def _compute_counts(
             before["missing"] += 1
         gti = r.get("gt_idx", -1)
         bs = r.get("before_seg")
-        if gti >= 0 and bs and not is_rest_like(bs.label) and not chord_equals_by_mapping(
-            bs.label, gt_disp[gti]
-        ):
+        if gti >= 0 and gti < len(gt_disp) and bs and not chord_equals_by_mapping(bs.label, gt_disp[gti]):
             before["wrong"] += 1
-        a_idx = gt_to_after.get(gti) if gti >= 0 else None
-        if gti >= 0 and a_idx is None:
-            after["missing"] += 1
-        if gti >= 0 and a_idx is not None and a_idx < len(after_seg):
-            alab = after_seg[a_idx].label or ""
-            if alab and not chord_equals_by_mapping(alab, gt_disp[gti]):
+        ares_c = r.get("_after_resolved")
+        if gti >= 0 and gti < len(gt_disp):
+            if ares_c is None:
+                after["missing"] += 1
+            elif not chord_equals_by_mapping(ares_c.label or "", gt_disp[gti]):
                 after["wrong"] += 1
     after_extra = 0
     if after_maps and after_maps.get("seg_idx_to_result"):
