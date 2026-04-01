@@ -187,6 +187,8 @@
         標錯 <span id="beforeWrong" class="font-semibold tabular-nums text-slate-900">0</span>
         <span class="mx-1 text-slate-300">·</span>
         合計 <span id="beforeTotal" class="font-bold tabular-nums text-indigo-700">0</span>
+        <span class="mx-1 text-slate-300">·</span>
+        正確率 <span id="beforeAcc" class="font-bold tabular-nums text-emerald-700">—</span>
       </p>
     </div>
     <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -199,6 +201,8 @@
         標錯 <span id="afterWrong" class="font-semibold tabular-nums text-slate-900">0</span>
         <span class="mx-1 text-slate-300">·</span>
         合計 <span id="afterTotal" class="font-bold tabular-nums text-indigo-700">0</span>
+        <span class="mx-1 text-slate-300">·</span>
+        正確率 <span id="afterAcc" class="font-bold tabular-nums text-emerald-700">—</span>
       </p>
     </div>
   </div>
@@ -278,11 +282,46 @@
     set("afterTotal", a.total ?? 0);
   }
 
+  function setAccuracyFromRows(rows){
+    const set = (id, v)=>{ const el = document.getElementById(id); if(el) el.textContent = v; };
+    if(!Array.isArray(rows) || rows.length === 0){
+      set("beforeAcc", "—");
+      set("afterAcc", "—");
+      return;
+    }
+
+    // 以「有 GT 的列」為分母，判斷 before/after 是否與 GT label 完全一致
+    // - gt_blank / gt_idx<0：不納入分母
+    // - before_blank / after_cell_blank：表示該側空白（當作不正確）
+    // - before_label_extra：多餘標記（不應算正確）
+    const gtRows = rows.filter(r => !(r && r.gt_blank) && (r && typeof r.gt_idx === "number" ? r.gt_idx >= 0 : true));
+    const denom = gtRows.length;
+    if(denom === 0){
+      set("beforeAcc", "—");
+      set("afterAcc", "—");
+      return;
+    }
+
+    let beforeCorrect = 0;
+    let afterCorrect = 0;
+    for(const r of gtRows){
+      const bOk = !r.before_blank && !r.before_label_diff && !r.before_label_extra;
+      const aOk = !r.after_cell_blank && !r.after_label_diff;
+      if(bOk) beforeCorrect += 1;
+      if(aOk) afterCorrect += 1;
+    }
+
+    const fmt = (num)=> (100 * num / denom).toFixed(1) + "% (" + num + "/" + denom + ")";
+    set("beforeAcc", fmt(beforeCorrect));
+    set("afterAcc", fmt(afterCorrect));
+  }
+
   function renderFromApi(data){
     compareBody.innerHTML = ""
     compareErr.textContent = "";
     setCounts(data.counts || {});
     const rows = data.merged_rows || [];
+    setAccuracyFromRows(rows);
 
     for(const r of rows){
       const tr = document.createElement("tr");
