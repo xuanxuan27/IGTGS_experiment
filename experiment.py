@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-實驗腳本：對單一音檔跑 IGTGS 內建和弦辨識（Chord-CNN-LSTM + madmom 節拍），
+實驗腳本：對單一音檔跑 IGTGS 內建和弦辨識（lvcr + madmom 節拍），
 再依「時間軸上每一個和弦 segment」檢查 quality 是否為 maj / maj7 / min / min7；
 若是則截取該段音訊送 ChordRefiner，若 softmax 最大值（信心）>= 0.5 則以 argmax 類別更新 quality（根音不變）。
 
@@ -86,7 +86,7 @@ CHORD_DICT_CHOICES = ("submission", "custom", "full", "extended", "ismir2017")
 
 
 def segments_to_lab_text(segments: list[dict[str, Any]]) -> str:
-    """輸出與 Chord-CNN-LSTM ChordLabIO 一致：每行 start \\t end \\t label（秒，浮點）。"""
+    """輸出與 lvcr ChordLabIO 一致：每行 start \\t end \\t label（秒，浮點）。"""
     rows: list[tuple[float, float, str]] = []
     for seg in segments:
         try:
@@ -188,7 +188,7 @@ def run_pipeline(
     _log.info("分析音檔（beat + chord，dict=%s）：%s", chord_dict, audio_path)
     kw: dict[str, Any] = {
         "beat_detector": "madmom",
-        "chord_detector": "chord-cnn-lstm",
+        "chord_detector": "LVCR",
     }
     sig = inspect.signature(analyze_audio_file)
     if "chord_dict" in sig.parameters:
@@ -215,8 +215,10 @@ def run_pipeline(
         "audioPath": str(audio_path),
         "duration": duration,
         "beatModel": beat_data.get("model_used") or "madmom",
-        "chordModel": chord_data.get("model_used") or "chord-cnn-lstm",
-        "chordDict": chord_dict,
+        "chordModel": chord_data.get("model_used") or "LVCR",
+        "chordDict": chord_data.get("chord_dict_used") or chord_data.get("chord_dict") or chord_dict,
+        "chordDictRequested": chord_data.get("chord_dict_requested") or chord_dict,
+        "chordDictUsed": chord_data.get("chord_dict_used") or chord_data.get("chord_dict") or chord_dict,
         "refinerWeightsPath": weights_path,
         "confidenceThreshold": REFINER_CONFIDENCE_MIN,
         "targetQualities": sorted(REFINE_QUALITIES),
@@ -250,7 +252,7 @@ def main() -> int:
         "--chord-dict",
         default="submission",
         choices=CHORD_DICT_CHOICES,
-        help="和弦詞表（對應 Chord-CNN-LSTM/data/{name}_chord_list.txt）",
+        help="和弦詞表（對應 lvcr/data/{name}_chord_list.txt）",
     )
     parser.add_argument("-v", "--verbose", action="store_true", help="印出除錯 log")
     args = parser.parse_args()

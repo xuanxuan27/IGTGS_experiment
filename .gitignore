@@ -2,3 +2,4 @@
 backend/app/domain/__pycache__/
 backend/app/services/__pycache__/
 backend/app/__pycache__
+__pycache__/

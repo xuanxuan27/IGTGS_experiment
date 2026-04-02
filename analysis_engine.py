@@ -12,7 +12,11 @@ from madmom_compat import prepare_for_madmom_import
 BASE_DIR = Path(__file__).resolve().parent
 IGTGS_BACKEND_DIR = resolve_igtgs_backend_dir(BASE_DIR)
 FIXED_BEAT_DETECTOR = "madmom"
-FIXED_CHORD_DETECTOR = "chord-cnn-lstm"
+FIXED_CHORD_DETECTOR = "lvcr"
+BACKEND_CHORD_DETECTOR = "LVCR"
+CHORD_DETECTOR_ALIASES = {"lvcr", "chord-cnn-lstm", "LVCR"}
+BACKEND_CHORD_DICT = "submission"
+CHORD_DICT_ALIASES = {"submission", "custom", "full", "extended", "ismir2017"}
 
 
 def _prepare_backend_imports() -> None:
@@ -47,9 +51,11 @@ def get_engine_status() -> dict[str, Any]:
             "mode": "local-engine",
             "sourceDir": str(IGTGS_BACKEND_DIR),
             "availableBeatDetectors": [FIXED_BEAT_DETECTOR],
-            "availableChordDetectors": [FIXED_CHORD_DETECTOR],
+            "availableChordDetectors": sorted(CHORD_DETECTOR_ALIASES),
+            "availableChordDicts": sorted(CHORD_DICT_ALIASES),
             "defaultBeatDetector": FIXED_BEAT_DETECTOR,
             "defaultChordDetector": FIXED_CHORD_DETECTOR,
+            "defaultChordDict": BACKEND_CHORD_DICT,
         }
     except Exception as exc:  # noqa: BLE001
         return {
@@ -68,8 +74,15 @@ def analyze_audio_file(
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     if beat_detector != FIXED_BEAT_DETECTOR:
         raise RuntimeError(f"Only {FIXED_BEAT_DETECTOR} is supported")
-    if chord_detector != FIXED_CHORD_DETECTOR:
-        raise RuntimeError(f"Only {FIXED_CHORD_DETECTOR} is supported")
+
+    if chord_detector not in CHORD_DETECTOR_ALIASES:
+        allowed = ", ".join(sorted(CHORD_DETECTOR_ALIASES))
+        raise RuntimeError(f"Only chord detectors [{allowed}] are supported")
+    chord_detector_backend = BACKEND_CHORD_DETECTOR
+    if chord_dict not in CHORD_DICT_ALIASES:
+        allowed = ", ".join(sorted(CHORD_DICT_ALIASES))
+        raise RuntimeError(f"Only chord dictionaries [{allowed}] are supported")
+    chord_dict_backend = BACKEND_CHORD_DICT
 
     beat_service, chord_service = get_services()
 
@@ -79,11 +92,13 @@ def analyze_audio_file(
 
     chord_data = chord_service.recognize_chords(
         audio_path,
-        detector=chord_detector,
-        chord_dict=chord_dict,
+        detector=chord_detector_backend,
+        chord_dict=chord_dict_backend,
         force=False,
     )
     if not chord_data.get("success"):
         raise RuntimeError(chord_data.get("error") or "Chord recognition failed")
+    chord_data["chord_dict_requested"] = chord_dict
+    chord_data["chord_dict_used"] = chord_data.get("chord_dict") or chord_dict_backend
 
     return beat_data, chord_data
