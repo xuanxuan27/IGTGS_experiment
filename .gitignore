@@ -1,1 +1,4 @@
 .chord_ui_cache/
+backend/app/domain/__pycache__/
+backend/app/services/__pycache__/
+backend/app/__pycache__

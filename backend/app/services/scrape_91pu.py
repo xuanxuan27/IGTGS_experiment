@@ -1,6 +1,7 @@
 import re
 import json
 import time
+import shutil
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -236,10 +237,27 @@ def get_verse_ids(p):
     txt = "".join([s.get_text(strip=True) for s in p.select("span")[:10]])
     return [int(n) for n in RE_VERSE_NUM.findall(txt)]
 
-def scrape_and_parse(url):
+def create_chrome_driver():
     options = webdriver.ChromeOptions()
     options.add_argument("--headless=new")
-    driver = webdriver.Chrome(options=options)
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--window-size=1920,1080")
+
+    # 在 Linux 上優先使用系統可找到的瀏覽器，降低「Chrome instance exited」機率
+    chrome_binary = (
+        shutil.which("google-chrome")
+        or shutil.which("chromium")
+        or shutil.which("chromium-browser")
+    )
+    if chrome_binary:
+        options.binary_location = chrome_binary
+
+    return webdriver.Chrome(options=options)
+
+def scrape_and_parse(url):
+    driver = create_chrome_driver()
 
     try:
         driver.get(url)
